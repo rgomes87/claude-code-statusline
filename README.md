@@ -1,30 +1,35 @@
 # claude-code-statusline
 
-A colourful, information-dense 3-line status line for [Claude Code](https://claude.ai/code), built as a bash script.
+A colourful, information-dense 4-line status line for [Claude Code](https://claude.ai/code), built as a bash script.
 
 ## Preview
 
 ```
-❮░░░░░░░░░░░░░░░░░░░░❯  21%  │  ⬇ 440  ⬆ 31.5k
-Claude Sonnet 4.6 · high  ›  ~/Versa/myproject  ⎇ main ✎2 ↑1
-● 5h ▪▪▪▪▪▪▪▪·· 78% ⏱ 3h 12m  │  ◕ 7d ▪▪▪▪▪▪···· 62% ⏱ 4d 23h
+❮■■□□□□□□□□❯   20%  ⬇ 447 ⬆ 10.8k
+Sonnet 4.6 · high ∷ …/tmp/claude-code-statusline  ⎇ main
+● 5h ▮▮▮▮▮▮▮▮▮▯ 90% ⏱ 0h 46m
+◕ 7d ▮▮▮▮▮▮▯▯▯▯ 60% ⏱ 4d 5h
 ```
 
 **Line 1 — Context window**
-- Gradient bar (green → yellow → orange → red) showing context usage
-- Percentage coloured by urgency
+- 10-cell gradient bar (green → yellow → orange → red) with `■`/`□` squares
+- `❮`/`❯` brackets colour-matched to the percentage urgency
+- Percentage fixed-width (3 chars) so token counts don't shift
 - Token counts: ⬇ input / ⬆ output
 
 **Line 2 — Session info**
-- Active model and effort level
+- Active model and effort level, separated from location by `∷`
 - Current working directory (truncated to last 2 components)
 - Git branch with status: `✎N` dirty files · `↑N` ahead · `↓N` behind
 
-**Line 3 — Rate limits**
-- 5-hour and 7-day windows shown as **remaining** capacity (starts full, drains to empty)
-- Staged circle icon changes with remaining capacity: `●` > 75% · `◕` > 50% · `◑` > 25% · `◔` > 0% · `○` empty
-- Mini bar drains green → red as allowance is consumed
-- Inline reset countdown (`⏱`) for each window
+**Line 3 — 5-hour rate limit**
+- Shown as **remaining** capacity (starts full, drains to empty)
+- Circle icon: `●` > 75% · `◕` > 50% · `◑` > 25% · `◔` > 0% · `○` empty
+- `▮`/`▯` bar drains green → red as allowance is consumed
+- Inline reset countdown (`⏱`)
+
+**Line 4 — 7-day rate limit**
+- Same format as line 3, always on its own line for easy scanning
 
 ---
 
@@ -82,7 +87,7 @@ Replace `YOUR_USERNAME` with your macOS username, or use the full path from `ech
 
 **Colours** — The script uses [256-colour ANSI codes](https://www.ditig.com/publications/256-colors-cheat-sheet). Change any `c 82` style call to a different colour number.
 
-**Context bar width** — Change `BAR_WIDTH=20` to any value.
+**Context bar width** — Change `BAR_WIDTH=10` to any value.
 
 **Effort level** — The script reads `effortLevel` from `~/.claude/settings.json` automatically. Set it there and it shows on Line 2.
 
@@ -92,7 +97,7 @@ Replace `YOUR_USERNAME` with your macOS username, or use the full path from `ech
 
 ## How it works
 
-Claude Code calls the script on every prompt update, piping a JSON object to stdin. The JSON contains context window usage, rate limit data, model info, and workspace path. The script parses this with `jq`, builds coloured ANSI output, and prints 3 lines that Claude Code renders in the status area.
+Claude Code calls the script on every prompt update, piping a JSON object to stdin. The JSON contains context window usage, rate limit data, model info, and workspace path. The script parses this with `jq`, builds coloured ANSI output, and prints up to 4 lines that Claude Code renders in the status area.
 
 The script is stateless — no files written, no background processes.
 
