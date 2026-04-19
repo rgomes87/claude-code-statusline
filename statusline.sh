@@ -84,27 +84,27 @@ fi
 PCT_RAW=$(echo "$input" | jq -r '.context_window.used_percentage // 0')
 PCT=$(printf '%.0f' "$PCT_RAW")
 
-BAR_WIDTH=20
+BAR_WIDTH=10
 FILLED=$((PCT * BAR_WIDTH / 100))
 
 # Full spectrum gradient: green → chartreuse → yellow → amber → orange → red → deep red
 BAR_COLORED=""
 for i in $(seq 1 $BAR_WIDTH); do
   if [ "$i" -le "$FILLED" ]; then
-    if   [ "$i" -le 2  ]; then COL=$(c 46)   # bright green
-    elif [ "$i" -le 4  ]; then COL=$(c 82)   # lime
-    elif [ "$i" -le 6  ]; then COL=$(c 118)  # chartreuse
-    elif [ "$i" -le 8  ]; then COL=$(c 154)  # yellow-green
-    elif [ "$i" -le 10 ]; then COL=$(c 220)  # yellow
-    elif [ "$i" -le 12 ]; then COL=$(c 214)  # amber
-    elif [ "$i" -le 14 ]; then COL=$(c 208)  # orange
-    elif [ "$i" -le 16 ]; then COL=$(c 202)  # dark orange
-    elif [ "$i" -le 18 ]; then COL=$(c 196)  # red
+    if   [ "$i" -le 1  ]; then COL=$(c 46)   # bright green
+    elif [ "$i" -le 2  ]; then COL=$(c 82)   # lime
+    elif [ "$i" -le 3  ]; then COL=$(c 118)  # chartreuse
+    elif [ "$i" -le 4  ]; then COL=$(c 154)  # yellow-green
+    elif [ "$i" -le 5  ]; then COL=$(c 220)  # yellow
+    elif [ "$i" -le 6  ]; then COL=$(c 214)  # amber
+    elif [ "$i" -le 7  ]; then COL=$(c 208)  # orange
+    elif [ "$i" -le 8  ]; then COL=$(c 202)  # dark orange
+    elif [ "$i" -le 9  ]; then COL=$(c 196)  # red
     else                        COL=$(c 160)  # deep red
     fi
-    BAR_COLORED="${BAR_COLORED}${COL}${bold}▓${reset}"
+    BAR_COLORED="${BAR_COLORED}${COL}${bold}■${reset}"
   else
-    BAR_COLORED="${BAR_COLORED}${GREY}░${reset}"
+    BAR_COLORED="${BAR_COLORED}${GREY}□${reset}"
   fi
 done
 
@@ -114,7 +114,7 @@ elif [ "$PCT" -lt 75 ]; then PCT_COL=$YELLOW
 elif [ "$PCT" -lt 90 ]; then PCT_COL=$ORANGE
 else                          PCT_COL=$RED
 fi
-PCT_COLORED=$(printf "${bold}${PCT_COL}${PCT}%%${reset}")
+PCT_COLORED=$(printf "${bold}${PCT_COL}%3d%%${reset}" "$PCT")
 
 # ── Rate limits ──────────────────────────────────────────────────────────────
 FIVE_H=$(echo "$input"  | jq -r '.rate_limits.five_hour.used_percentage  // empty')
@@ -154,8 +154,8 @@ if [ -n "$FIVE_H" ]; then
   FH_BAR=""
   FH_FILLED=$((FH_INT * 10 / 100))
   for _i in $(seq 1 10); do
-    if [ "$_i" -le "$FH_FILLED" ]; then FH_BAR="${FH_BAR}${FH_ICOL}▪${reset}"
-    else                                  FH_BAR="${FH_BAR}${GREY}·${reset}"
+    if [ "$_i" -le "$FH_FILLED" ]; then FH_BAR="${FH_BAR}${FH_ICOL}▮${reset}"
+    else                                  FH_BAR="${FH_BAR}${GREY}▯${reset}"
     fi
   done
   if   [ "$FH_INT" -gt 75 ]; then FH_SYM="●"
@@ -165,7 +165,7 @@ if [ -n "$FIVE_H" ]; then
   else                             FH_SYM="○"
   fi
   FH_ICON=$(printf "${FH_ICOL}${FH_SYM}${reset}")
-  FH_SEG=$(printf "${FH_ICON} ${dim}5h${reset} ${FH_BAR} ${bold}${FH_COL}${FH_INT}%%${reset}")
+  FH_SEG=$(printf "${FH_ICON} ${bold}$(c 250)5h${reset} ${FH_BAR} ${bold}${FH_COL}${FH_INT}%%${reset}")
 fi
 
 # ── Reset countdowns ─────────────────────────────────────────────────────────
@@ -212,8 +212,8 @@ if [ -n "$SEVEN_D" ]; then
   SD_BAR=""
   SD_FILLED=$((SD_INT * 10 / 100))
   for _i in $(seq 1 10); do
-    if [ "$_i" -le "$SD_FILLED" ]; then SD_BAR="${SD_BAR}${SD_ICOL}▪${reset}"
-    else                                 SD_BAR="${SD_BAR}${GREY}·${reset}"
+    if [ "$_i" -le "$SD_FILLED" ]; then SD_BAR="${SD_BAR}${SD_ICOL}▮${reset}"
+    else                                 SD_BAR="${SD_BAR}${GREY}▯${reset}"
     fi
   done
   if   [ "$SD_INT" -gt 75 ]; then SD_SYM="●"
@@ -223,12 +223,11 @@ if [ -n "$SEVEN_D" ]; then
   else                             SD_SYM="○"
   fi
   SD_ICON=$(printf "${SD_ICOL}${SD_SYM}${reset}")
-  SD_SEG=$(printf "${SD_ICON} ${dim}7d${reset} ${SD_BAR} ${bold}${SD_COL}${SD_INT}%%${reset}")
+  SD_SEG=$(printf "${SD_ICON} ${bold}$(c 250)7d${reset} ${SD_BAR} ${bold}${SD_COL}${SD_INT}%%${reset}")
   if [ -n "$SEVEN_D_RESET" ]; then
     R=$(fmt_reset "$SEVEN_D_RESET")
     [ -n "$R" ] && SD_SEG="${SD_SEG} $(c 244)⏱${reset} ${bold}${MUTED_CYAN}${R}${reset}"
   fi
-  [ -n "$RATE_STR" ] && RATE_STR="${RATE_STR} ${GREY}│${reset} ${SD_SEG}" || RATE_STR="$SD_SEG"
 fi
 
 # ── Token counts ─────────────────────────────────────────────────────────────
@@ -250,28 +249,33 @@ if [ "$TOT_IN" -gt 0 ] || [ "$TOT_OUT" -gt 0 ]; then
   IN_FMT=$(fmt_tok "$TOT_IN")
   OUT_FMT=$(fmt_tok "$TOT_OUT")
   # ⬇ in / ⬆ out as directional icons to distinguish at a glance
-  TOK_SEG=$(printf "$(c 244)⬇ ${reset}${bold}${BLUE}${IN_FMT}${reset}  $(c 244)⬆ ${reset}${bold}${MAGENTA}${OUT_FMT}${reset}")
+  TOK_SEG=$(printf "$(c 244)⬇ ${reset}${bold}${BLUE}${IN_FMT}${reset} $(c 244)⬆ ${reset}${bold}${MAGENTA}${OUT_FMT}${reset}")
 fi
 
 # ── Separators ───────────────────────────────────────────────────────────────
 SEP=$(printf "${GREY} │ ${reset}")
 # Chevron-style separator used between model·effort and location on line 2
-SEP2=$(printf " $(c 238)⟫${reset} ")
+SEP2=$(printf " $(c 238)∷${reset} ")
 
 # ── Assemble line bodies (no labels) ─────────────────────────────────────────
 # Line 1 — context bar + token counts
-LINE1="${dim}$(c 238)❮${reset}${BAR_COLORED}${dim}$(c 238)❯${reset}  ${PCT_COLORED}"
-[ -n "$TOK_SEG" ] && LINE1="${LINE1}${SEP}${TOK_SEG}"
+LINE1="${bold}${PCT_COL}❮${reset}${BAR_COLORED}${bold}${PCT_COL}❯${reset}  ${PCT_COLORED}"
+[ -n "$TOK_SEG" ] && LINE1="${LINE1}  ${TOK_SEG}"
 
 # Line 2 — model · effort  ⟫  directory  ⎇ branch
 LOC_SEG="${CWD_SEG}"
 [ -n "$GIT_SEG" ] && LOC_SEG="${LOC_SEG}  ${GIT_SEG}"
 LINE2="${MODEL_COLORED}${SEP2}${LOC_SEG}"
 
-# Line 3 — rate limits with inline resets
+# Line 3 — 5h rate limit
 LINE3="${RATE_STR}"
 
-if [ -n "$LINE3" ]; then
+# Line 4 — 7d rate limit
+LINE4="${SD_SEG}"
+
+if [ -n "$LINE3" ] && [ -n "$LINE4" ]; then
+  printf "%b\n%b\n%b\n%b\n" "$LINE1" "$LINE2" "$LINE3" "$LINE4"
+elif [ -n "$LINE3" ]; then
   printf "%b\n%b\n%b\n" "$LINE1" "$LINE2" "$LINE3"
 else
   printf "%b\n%b\n" "$LINE1" "$LINE2"
