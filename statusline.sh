@@ -72,10 +72,34 @@ fi
 
 # ── Model name ───────────────────────────────────────────────────────────────
 MODEL=$(echo "$input" | jq -r '.model.display_name')
-EFFORT=$(jq -r '.effortLevel // empty' ~/.claude/settings.json 2>/dev/null)
+EFFORT=$(echo "$input" | jq -r '.effortLevel // empty' 2>/dev/null)
+[ -z "$EFFORT" ] && EFFORT=$(jq -r '.effortLevel // empty' ~/.claude/settings.json 2>/dev/null)
+
+# Effort label colour — matches /effort UI colours:
+#   low    → yellow/amber  (c 220)
+#   medium → green         (c 82)
+#   high   → periwinkle    (c 105)
+#   xhigh  → purple/violet (c 141)
+#   max    → per-character rainbow
+case "$EFFORT" in
+  low)    EFFORT_COL=$(c 220)  ;;
+  medium) EFFORT_COL=$(c 82)   ;;
+  high)   EFFORT_COL=$(c 105)  ;;
+  xhigh)  EFFORT_COL=$(c 141)  ;;
+  max)    EFFORT_COL=""       ;;
+  *)      EFFORT_COL=$SILVER  ;;
+esac
+
+if [ "$EFFORT" = "max" ]; then
+  EFFORT_LABEL="${bold}$(c 196)m${reset}${bold}$(c 226)a${reset}${bold}$(c 46)x${reset}"
+elif [ -n "$EFFORT_COL" ] && [ -n "$EFFORT" ]; then
+  EFFORT_LABEL="${bold}${EFFORT_COL}${EFFORT}${reset}"
+else
+  EFFORT_LABEL=""
+fi
 
 if [ -n "$EFFORT" ]; then
-  MODEL_COLORED=$(printf "${bold}${CYAN}${MODEL}${reset}${GREY} · ${reset}${bold}${SILVER}${EFFORT}${reset}")
+  MODEL_COLORED=$(printf "${bold}${CYAN}${MODEL}${reset}${GREY} · ${reset}${EFFORT_LABEL}")
 else
   MODEL_COLORED=$(printf "${bold}${CYAN}${MODEL}${reset}")
 fi
@@ -87,33 +111,53 @@ PCT=$(printf '%.0f' "$PCT_RAW")
 BAR_WIDTH=10
 FILLED=$((PCT * BAR_WIDTH / 100))
 
-# Full spectrum gradient: green → chartreuse → yellow → amber → orange → red → deep red
+# Smooth 10-step green→red gradient — one unique colour per cell:
+#   cell  1  →  0–10%   pure green      (c 46,  #00ff00)
+#   cell  2  → 10–20%   yellow-green    (c 82,  #5fff00)
+#   cell  3  → 20–30%   chartreuse      (c 118, #87ff00)
+#   cell  4  → 30–40%   light lime      (c 154, #afff00)
+#   cell  5  → 40–50%   yellow-lime     (c 190, #d7ff00)
+#   cell  6  → 50–60%   pure yellow     (c 226, #ffff00)
+#   cell  7  → 60–70%   gold            (c 220, #ffd700)
+#   cell  8  → 70–80%   amber           (c 214, #ffaf00)
+#   cell  9  → 80–90%   orange-red      (c 202, #ff5f00)  ← almost red
+#   cell 10  → 90–100%  pure red        (c 196, #ff0000)  ← complete red
 BAR_COLORED=""
 for i in $(seq 1 $BAR_WIDTH); do
   if [ "$i" -le "$FILLED" ]; then
-    if   [ "$i" -le 1  ]; then COL=$(c 46)   # bright green
-    elif [ "$i" -le 2  ]; then COL=$(c 82)   # lime
-    elif [ "$i" -le 3  ]; then COL=$(c 118)  # chartreuse
-    elif [ "$i" -le 4  ]; then COL=$(c 154)  # yellow-green
-    elif [ "$i" -le 5  ]; then COL=$(c 220)  # yellow
-    elif [ "$i" -le 6  ]; then COL=$(c 214)  # amber
-    elif [ "$i" -le 7  ]; then COL=$(c 208)  # orange
-    elif [ "$i" -le 8  ]; then COL=$(c 202)  # dark orange
-    elif [ "$i" -le 9  ]; then COL=$(c 196)  # red
-    else                        COL=$(c 160)  # deep red
-    fi
+    case "$i" in
+      1)  COL=$(c 46)  ;;
+      2)  COL=$(c 82)  ;;
+      3)  COL=$(c 118) ;;
+      4)  COL=$(c 154) ;;
+      5)  COL=$(c 190) ;;
+      6)  COL=$(c 226) ;;
+      7)  COL=$(c 220) ;;
+      8)  COL=$(c 214) ;;
+      9)  COL=$(c 202) ;;
+      10) COL=$(c 196) ;;
+    esac
     BAR_COLORED="${BAR_COLORED}${COL}${bold}■${reset}"
   else
     BAR_COLORED="${BAR_COLORED}${GREY}□${reset}"
   fi
 done
 
-# Colour the percentage itself: green < 50, yellow 50-74, orange 75-89, red 90+
-if   [ "$PCT" -lt 50 ]; then PCT_COL=$GREEN
-elif [ "$PCT" -lt 75 ]; then PCT_COL=$YELLOW
-elif [ "$PCT" -lt 90 ]; then PCT_COL=$ORANGE
-else                          PCT_COL=$RED
-fi
+# Percentage colour tracks the last filled cell's gradient colour
+case "$FILLED" in
+  0)  PCT_COL=$(c 46)  ;;
+  1)  PCT_COL=$(c 46)  ;;
+  2)  PCT_COL=$(c 82)  ;;
+  3)  PCT_COL=$(c 118) ;;
+  4)  PCT_COL=$(c 154) ;;
+  5)  PCT_COL=$(c 190) ;;
+  6)  PCT_COL=$(c 226) ;;
+  7)  PCT_COL=$(c 220) ;;
+  8)  PCT_COL=$(c 214) ;;
+  9)  PCT_COL=$(c 202) ;;
+  10) PCT_COL=$(c 196) ;;
+  *)  PCT_COL=$(c 46)  ;;
+esac
 PCT_COLORED=$(printf "${bold}${PCT_COL}%3d%%${reset}" "$PCT")
 
 # ── Rate limits ──────────────────────────────────────────────────────────────
@@ -145,26 +189,51 @@ RATE_STR=""
 if [ -n "$FIVE_H" ]; then
   FH_USED=$(printf '%.0f' "$FIVE_H")
   FH_INT=$((100 - FH_USED))
-  if   [ "$FH_INT" -gt 60 ]; then FH_COL=$(c 82);  FH_ICOL=$(c 82)
-  elif [ "$FH_INT" -gt 40 ]; then FH_COL=$(c 154); FH_ICOL=$(c 154)
-  elif [ "$FH_INT" -gt 25 ]; then FH_COL=$YELLOW;  FH_ICOL=$YELLOW
-  elif [ "$FH_INT" -gt 10 ]; then FH_COL=$ORANGE;  FH_ICOL=$ORANGE
-  else                             FH_COL=$RED;     FH_ICOL=$RED
-  fi
-  FH_BAR=""
   FH_FILLED=$((FH_INT * 10 / 100))
+  # Inverted gradient: cell 1=red (danger) … cell 10=green (healthy)
+  # Uniform colour across all filled cells; 10-step gradient keyed to fill level
+  case "$FH_FILLED" in
+    10) FH_BAR_COL=$(c 46)  ;;
+    9)  FH_BAR_COL=$(c 82)  ;;
+    8)  FH_BAR_COL=$(c 118) ;;
+    7)  FH_BAR_COL=$(c 154) ;;
+    6)  FH_BAR_COL=$(c 190) ;;
+    5)  FH_BAR_COL=$(c 226) ;;
+    4)  FH_BAR_COL=$(c 220) ;;
+    3)  FH_BAR_COL=$(c 214) ;;
+    2)  FH_BAR_COL=$(c 202) ;;
+    *)  FH_BAR_COL=$(c 196) ;;
+  esac
+  FH_BAR=""
   for _i in $(seq 1 10); do
-    if [ "$_i" -le "$FH_FILLED" ]; then FH_BAR="${FH_BAR}${FH_ICOL}▮${reset}"
-    else                                  FH_BAR="${FH_BAR}${GREY}▯${reset}"
+    if [ "$_i" -le "$FH_FILLED" ]; then
+      FH_BAR="${FH_BAR}${FH_BAR_COL}▮${reset}"
+    else
+      FH_BAR="${FH_BAR}${GREY}▯${reset}"
     fi
   done
+  # Icon/label colour tracks last filled cell
+  case "$FH_FILLED" in
+    0)  FH_COL=$(c 196) ;;
+    1)  FH_COL=$(c 196) ;;
+    2)  FH_COL=$(c 202) ;;
+    3)  FH_COL=$(c 208) ;;
+    4)  FH_COL=$(c 214) ;;
+    5)  FH_COL=$(c 220) ;;
+    6)  FH_COL=$(c 226) ;;
+    7)  FH_COL=$(c 190) ;;
+    8)  FH_COL=$(c 154) ;;
+    9)  FH_COL=$(c 82)  ;;
+    10) FH_COL=$(c 46)  ;;
+    *)  FH_COL=$(c 46)  ;;
+  esac
   if   [ "$FH_INT" -gt 75 ]; then FH_SYM="●"
   elif [ "$FH_INT" -gt 50 ]; then FH_SYM="◕"
   elif [ "$FH_INT" -gt 25 ]; then FH_SYM="◑"
   elif [ "$FH_INT" -gt 0  ]; then FH_SYM="◔"
   else                             FH_SYM="○"
   fi
-  FH_ICON=$(printf "${FH_ICOL}${FH_SYM}${reset}")
+  FH_ICON=$(printf "${FH_COL}${FH_SYM}${reset}")
   FH_SEG=$(printf "${FH_ICON} ${bold}$(c 250)5h${reset} ${FH_BAR} ${bold}${FH_COL}${FH_INT}%%${reset}")
 fi
 
@@ -203,26 +272,51 @@ SEVEN_D_RESET=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empty
 if [ -n "$SEVEN_D" ]; then
   SD_USED=$(printf '%.0f' "$SEVEN_D")
   SD_INT=$((100 - SD_USED))
-  if   [ "$SD_INT" -gt 60 ]; then SD_COL=$(c 82);  SD_ICOL=$(c 82)
-  elif [ "$SD_INT" -gt 40 ]; then SD_COL=$(c 154); SD_ICOL=$(c 154)
-  elif [ "$SD_INT" -gt 25 ]; then SD_COL=$YELLOW;  SD_ICOL=$YELLOW
-  elif [ "$SD_INT" -gt 10 ]; then SD_COL=$ORANGE;  SD_ICOL=$ORANGE
-  else                             SD_COL=$RED;     SD_ICOL=$RED
-  fi
-  SD_BAR=""
   SD_FILLED=$((SD_INT * 10 / 100))
+  # Inverted gradient: cell 1=red (danger) … cell 10=green (healthy)
+  # Uniform colour across all filled cells; 10-step gradient keyed to fill level
+  case "$SD_FILLED" in
+    10) SD_BAR_COL=$(c 46)  ;;
+    9)  SD_BAR_COL=$(c 82)  ;;
+    8)  SD_BAR_COL=$(c 118) ;;
+    7)  SD_BAR_COL=$(c 154) ;;
+    6)  SD_BAR_COL=$(c 190) ;;
+    5)  SD_BAR_COL=$(c 226) ;;
+    4)  SD_BAR_COL=$(c 220) ;;
+    3)  SD_BAR_COL=$(c 214) ;;
+    2)  SD_BAR_COL=$(c 202) ;;
+    *)  SD_BAR_COL=$(c 196) ;;
+  esac
+  SD_BAR=""
   for _i in $(seq 1 10); do
-    if [ "$_i" -le "$SD_FILLED" ]; then SD_BAR="${SD_BAR}${SD_ICOL}▮${reset}"
-    else                                 SD_BAR="${SD_BAR}${GREY}▯${reset}"
+    if [ "$_i" -le "$SD_FILLED" ]; then
+      SD_BAR="${SD_BAR}${SD_BAR_COL}▮${reset}"
+    else
+      SD_BAR="${SD_BAR}${GREY}▯${reset}"
     fi
   done
+  # Icon/label colour tracks last filled cell
+  case "$SD_FILLED" in
+    0)  SD_COL=$(c 196) ;;
+    1)  SD_COL=$(c 196) ;;
+    2)  SD_COL=$(c 202) ;;
+    3)  SD_COL=$(c 208) ;;
+    4)  SD_COL=$(c 214) ;;
+    5)  SD_COL=$(c 220) ;;
+    6)  SD_COL=$(c 226) ;;
+    7)  SD_COL=$(c 190) ;;
+    8)  SD_COL=$(c 154) ;;
+    9)  SD_COL=$(c 82)  ;;
+    10) SD_COL=$(c 46)  ;;
+    *)  SD_COL=$(c 46)  ;;
+  esac
   if   [ "$SD_INT" -gt 75 ]; then SD_SYM="●"
   elif [ "$SD_INT" -gt 50 ]; then SD_SYM="◕"
   elif [ "$SD_INT" -gt 25 ]; then SD_SYM="◑"
   elif [ "$SD_INT" -gt 0  ]; then SD_SYM="◔"
   else                             SD_SYM="○"
   fi
-  SD_ICON=$(printf "${SD_ICOL}${SD_SYM}${reset}")
+  SD_ICON=$(printf "${SD_COL}${SD_SYM}${reset}")
   SD_SEG=$(printf "${SD_ICON} ${bold}$(c 250)7d${reset} ${SD_BAR} ${bold}${SD_COL}${SD_INT}%%${reset}")
   if [ -n "$SEVEN_D_RESET" ]; then
     R=$(fmt_reset "$SEVEN_D_RESET")
@@ -259,7 +353,8 @@ SEP2=$(printf " $(c 238)∷${reset} ")
 
 # ── Assemble line bodies (no labels) ─────────────────────────────────────────
 # Line 1 — context bar + token counts
-LINE1="${bold}${PCT_COL}❮${reset}${BAR_COLORED}${bold}${PCT_COL}❯${reset}  ${PCT_COLORED}"
+# Bracket colour reflects current effort bucket (matches bar + percentage)
+LINE1="${bold}${PCT_COL}❮${reset}${BAR_COLORED}${bold}${PCT_COL}❯${reset} ${PCT_COLORED}"
 [ -n "$TOK_SEG" ] && LINE1="${LINE1}  ${TOK_SEG}"
 
 # Line 2 — model · effort  ⟫  directory  ⎇ branch
