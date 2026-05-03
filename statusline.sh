@@ -52,7 +52,7 @@ CWD_SEG=$(printf "${bold}$(c 204)${SHORT_CWD}${reset}")
 GIT_BRANCH=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" branch --show-current 2>/dev/null)
 GIT_SEG=""
 if [ -n "$GIT_BRANCH" ]; then
-  GIT_SEG=$(printf "${bold}$(c 51)⎇${reset} ${bold}$(c 117)${GIT_BRANCH}${reset}")
+  GIT_SEG=$(printf "🌿 ${bold}$(c 117)${GIT_BRANCH}${reset}")
 
   # Dirty: count staged + unstaged changed files (not untracked)
   DIRTY=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" status --porcelain 2>/dev/null | grep -c '^[^?]')
@@ -104,12 +104,44 @@ else
   MODEL_COLORED=$(printf "${bold}${CYAN}${MODEL}${reset}")
 fi
 
+# ── Token reads (needed before context bar) ──────────────────────────────────
+TOT_IN=$(echo "$input"  | jq -r '.context_window.total_input_tokens  // 0')
+TOT_OUT=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
+
+fmt_tok() {
+  local n="$1"
+  if [ "$n" -ge 1000 ]; then
+    python3 -c "print(f'{$n/1000:.1f}k')" 2>/dev/null || echo "${n}"
+  else
+    echo "$n"
+  fi
+}
+
 # ── Context bar ─────────────────────────────────────────────────────────────
 PCT_RAW=$(echo "$input" | jq -r '.context_window.used_percentage // 0')
 PCT=$(printf '%.0f' "$PCT_RAW")
 
 BAR_WIDTH=10
 FILLED=$((PCT * BAR_WIDTH / 100))
+
+# Max window: try JSON field first, fall back to 200K (all current Claude models)
+MAX_WIN=$(echo "$input" | jq -r '.context_window.max_tokens // 200000')
+[ -z "$MAX_WIN" ] || [ "$MAX_WIN" -eq 0 ] 2>/dev/null && MAX_WIN=200000
+
+# Actual context tokens in use (used % × window size)
+CTX_TOKS=$(python3 -c "print(int($PCT_RAW * $MAX_WIN / 100))" 2>/dev/null || echo 0)
+
+# 100K separator: cell boundary index (separator appears after this cell)
+SEP_CELL=$(python3 -c "print(int(100000 / $MAX_WIN * $BAR_WIDTH))" 2>/dev/null || echo 5)
+SHOW_SEP=0
+[ "$SEP_CELL" -gt 0 ] && [ "$SEP_CELL" -lt "$BAR_WIDTH" ] && SHOW_SEP=1
+
+# Separator color: white when under 100K, amber once past
+if [ "$CTX_TOKS" -ge 100000 ]; then
+  SEP_COL=$(c 208)
+else
+  SEP_COL=$(c 255)
+fi
 
 # Smooth 10-step green→red gradient — one unique colour per cell:
 #   cell  1  →  0–10%   pure green      (c 46,  #00ff00)
@@ -124,6 +156,10 @@ FILLED=$((PCT * BAR_WIDTH / 100))
 #   cell 10  → 90–100%  pure red        (c 196, #ff0000)  ← complete red
 BAR_COLORED=""
 for i in $(seq 1 $BAR_WIDTH); do
+  # Inject 100K separator before cell SEP_CELL+1 (i.e., after cell SEP_CELL)
+  if [ "$SHOW_SEP" -eq 1 ] && [ "$i" -eq "$((SEP_CELL + 1))" ]; then
+    BAR_COLORED="${BAR_COLORED}${bold}${SEP_COL}|${reset}"
+  fi
   if [ "$i" -le "$FILLED" ]; then
     case "$i" in
       1)  COL=$(c 46)  ;;
@@ -158,7 +194,8 @@ case "$FILLED" in
   10) PCT_COL=$(c 196) ;;
   *)  PCT_COL=$(c 46)  ;;
 esac
-PCT_COLORED=$(printf "${bold}${PCT_COL}%3d%%${reset}" "$PCT")
+CTX_TOK_FMT=$(fmt_tok "$CTX_TOKS")
+PCT_COLORED=$(printf "${bold}${PCT_COL}${CTX_TOK_FMT} - %d%%${reset}" "$PCT")
 
 # ── Rate limits ──────────────────────────────────────────────────────────────
 FIVE_H=$(echo "$input"  | jq -r '.rate_limits.five_hour.used_percentage  // empty')
@@ -227,13 +264,13 @@ if [ -n "$FIVE_H" ]; then
     10) FH_COL=$(c 46)  ;;
     *)  FH_COL=$(c 46)  ;;
   esac
-  if   [ "$FH_INT" -gt 75 ]; then FH_SYM="●"
-  elif [ "$FH_INT" -gt 50 ]; then FH_SYM="◕"
-  elif [ "$FH_INT" -gt 25 ]; then FH_SYM="◑"
-  elif [ "$FH_INT" -gt 0  ]; then FH_SYM="◔"
-  else                             FH_SYM="○"
+  if   [ "$FH_INT" -gt 75 ]; then FH_SYM="🟢"
+  elif [ "$FH_INT" -gt 50 ]; then FH_SYM="🟡"
+  elif [ "$FH_INT" -gt 25 ]; then FH_SYM="🟠"
+  elif [ "$FH_INT" -gt 0  ]; then FH_SYM="🔴"
+  else                             FH_SYM="⭕"
   fi
-  FH_ICON=$(printf "${FH_COL}${FH_SYM}${reset}")
+  FH_ICON="$FH_SYM"
   FH_SEG=$(printf "${FH_ICON} ${bold}$(c 250)5h${reset} ${FH_BAR} ${bold}${FH_COL}${FH_INT}%%${reset}")
 fi
 
@@ -249,10 +286,11 @@ if diff > 0:
     d = diff // 86400
     h = (diff % 86400) // 3600
     m = (diff % 3600) // 60
+    s = diff % 60
     if d > 0:
-        print(f'{d}d {h}h')
+        print(f'{d}d {h}h {m}m {s}s')
     else:
-        print(f'{h}h {m}m')
+        print(f'   {h}h {m}m {s}s')
 " 2>/dev/null
 }
 
@@ -263,7 +301,7 @@ if [ -n "$FH_SEG" ]; then
   RATE_STR="$FH_SEG"
   if [ -n "$FIVE_H_RESET" ]; then
     R=$(fmt_reset "$FIVE_H_RESET")
-    [ -n "$R" ] && RATE_STR="${RATE_STR} $(c 244)⏱${reset} ${bold}${MUTED_CYAN}${R}${reset}"
+    [ -n "$R" ] && RATE_STR="${RATE_STR} ⏱️${bold}${MUTED_CYAN}${R}${reset}"
   fi
 fi
 
@@ -310,40 +348,27 @@ if [ -n "$SEVEN_D" ]; then
     10) SD_COL=$(c 46)  ;;
     *)  SD_COL=$(c 46)  ;;
   esac
-  if   [ "$SD_INT" -gt 75 ]; then SD_SYM="●"
-  elif [ "$SD_INT" -gt 50 ]; then SD_SYM="◕"
-  elif [ "$SD_INT" -gt 25 ]; then SD_SYM="◑"
-  elif [ "$SD_INT" -gt 0  ]; then SD_SYM="◔"
-  else                             SD_SYM="○"
+  if   [ "$SD_INT" -gt 75 ]; then SD_SYM="🟢"
+  elif [ "$SD_INT" -gt 50 ]; then SD_SYM="🟡"
+  elif [ "$SD_INT" -gt 25 ]; then SD_SYM="🟠"
+  elif [ "$SD_INT" -gt 0  ]; then SD_SYM="🔴"
+  else                             SD_SYM="⭕"
   fi
-  SD_ICON=$(printf "${SD_COL}${SD_SYM}${reset}")
+  SD_ICON="$SD_SYM"
   SD_SEG=$(printf "${SD_ICON} ${bold}$(c 250)7d${reset} ${SD_BAR} ${bold}${SD_COL}${SD_INT}%%${reset}")
   if [ -n "$SEVEN_D_RESET" ]; then
     R=$(fmt_reset "$SEVEN_D_RESET")
-    [ -n "$R" ] && SD_SEG="${SD_SEG} $(c 244)⏱${reset} ${bold}${MUTED_CYAN}${R}${reset}"
+    [ -n "$R" ] && SD_SEG="${SD_SEG} ⏱️${bold}${MUTED_CYAN}${R}${reset}"
   fi
 fi
 
 # ── Token counts ─────────────────────────────────────────────────────────────
-TOT_IN=$(echo "$input"  | jq -r '.context_window.total_input_tokens  // 0')
-TOT_OUT=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
-
-# Format with k suffix when >= 1000
-fmt_tok() {
-  local n="$1"
-  if [ "$n" -ge 1000 ]; then
-    python3 -c "print(f'{$n/1000:.1f}k')" 2>/dev/null || echo "${n}"
-  else
-    echo "$n"
-  fi
-}
-
 TOK_SEG=""
 if [ "$TOT_IN" -gt 0 ] || [ "$TOT_OUT" -gt 0 ]; then
   IN_FMT=$(fmt_tok "$TOT_IN")
   OUT_FMT=$(fmt_tok "$TOT_OUT")
   # ⬇ in / ⬆ out as directional icons to distinguish at a glance
-  TOK_SEG=$(printf "$(c 244)⬇ ${reset}${bold}${BLUE}${IN_FMT}${reset} $(c 244)⬆ ${reset}${bold}${MAGENTA}${OUT_FMT}${reset}")
+  TOK_SEG=$(printf "⬇️ ${bold}${BLUE}${IN_FMT}${reset} ⬆️ ${bold}${MAGENTA}${OUT_FMT}${reset}")
 fi
 
 # ── Separators ───────────────────────────────────────────────────────────────
