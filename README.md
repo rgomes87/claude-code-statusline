@@ -5,31 +5,32 @@ A colourful, information-dense 4-line status line for [Claude Code](https://clau
 ## Preview
 
 ```
-❮■■□□□□□□□□❯   20%  ⬇ 447 ⬆ 10.8k
-Sonnet 4.6 · high ∷ …/tmp/claude-code-statusline  ⎇ main
-● 5h ▮▮▮▮▮▮▮▮▮▯ 90% ⏱ 0h 46m
-◕ 7d ▮▮▮▮▮▮▯▯▯▯ 60% ⏱ 4d 5h
+❮■■□□□□□□□□❯  20% - 36%  ⬇️ 447 ⬆️ 10.8k
+Sonnet 4.6 · xhigh ∷ 🌿 main
+🟢 5h ▮▮▮▮▮▮▮▮▮▯ 90% ⏱️ 0h 46m 12s
+🟢 7d ▮▮▮▮▮▮▯▯▯▯ 79% ⏱️ 4d 1h 13m 34s
 ```
 
 **Line 1 — Context window**
 - 10-cell gradient bar (green → yellow → orange → red) with `■`/`□` squares
 - `❮`/`❯` brackets colour-matched to the percentage urgency
-- Percentage fixed-width (3 chars) so token counts don't shift
-- Token counts: ⬇ input / ⬆ output
+- Token counts in use and percentage: `72.0k - 36%`
+- Token counts: ⬇️ input / ⬆️ output
 
 **Line 2 — Session info**
 - Active model and effort level, separated from location by `∷`
 - Current working directory (truncated to last 2 components)
-- Git branch with status: `✎N` dirty files · `↑N` ahead · `↓N` behind
+- 🌿 Git branch with status: `✎N` dirty files · `↑N` ahead · `↓N` behind
 
 **Line 3 — 5-hour rate limit**
 - Shown as **remaining** capacity (starts full, drains to empty)
-- Circle icon: `●` > 75% · `◕` > 50% · `◑` > 25% · `◔` > 0% · `○` empty
+- Emoji health dot: 🟢 > 75% · 🟡 > 50% · 🟠 > 25% · 🔴 > 0% · ⭕ empty
 - `▮`/`▯` bar drains green → red as allowance is consumed
-- Inline reset countdown (`⏱`)
+- Inline reset countdown with seconds (⏱️ `Nh Nm Ns`), hours-aligned with 7d line
 
 **Line 4 — 7-day rate limit**
 - Same format as line 3, always on its own line for easy scanning
+- Reset countdown includes full detail: `Nd Nh Nm Ns`
 
 ---
 
@@ -73,11 +74,14 @@ Merge the following into your existing `~/.claude/settings.json` (create the fil
   "statusLine": {
     "type": "command",
     "command": "/Users/YOUR_USERNAME/.claude/statusline.sh",
-    "padding": 2
+    "padding": 2,
+    "refreshInterval": 1
   }
 }
 ```
 Replace `YOUR_USERNAME` with your macOS username, or use the full path from `echo ~/.claude/statusline.sh`.
+
+`refreshInterval: 1` makes the status line refresh every second, so countdowns tick in real time. Without it, the line only updates when a new message is sent.
 
 **4. Restart Claude Code** — the status line appears at the bottom of the terminal.
 
@@ -97,7 +101,7 @@ Replace `YOUR_USERNAME` with your macOS username, or use the full path from `ech
 
 ## How it works
 
-Claude Code calls the script on every prompt update, piping a JSON object to stdin. The JSON contains context window usage, rate limit data, model info, and workspace path. The script parses this with `jq`, builds coloured ANSI output, and prints up to 4 lines that Claude Code renders in the status area.
+Claude Code calls the script on every prompt update (and every second with `refreshInterval: 1`), piping a JSON object to stdin. The JSON contains context window usage, rate limit data, model info, and workspace path. The script parses this with `jq`, builds coloured ANSI output, and prints up to 4 lines that Claude Code renders in the status area.
 
 The script is stateless — no files written, no background processes.
 
