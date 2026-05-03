@@ -5,10 +5,10 @@ A colourful, information-dense 4-line status line for [Claude Code](https://clau
 ## Preview
 
 ```
-❮■■□□□□□□□□❯  20% - 36%  ⬇️ 447 ⬆️ 10.8k
-Sonnet 4.6 · xhigh ∷ 🌿 main
-🟢 5h ▮▮▮▮▮▮▮▮▮▯ 90% ⏱️ 0h 46m 12s
-🟢 7d ▮▮▮▮▮▮▯▯▯▯ 79% ⏱️ 4d 1h 13m 34s
+❮■■■■□|□□□□□❯ 84.0k - 42%  ⬇️  3.3k ⬆️  18.5k
+Sonnet 4.6 · xhigh ∷ ~
+🟠 5h ▮▮▯▯▯▯▯▯▯▯ 29% ⏱️    0h 56m 55s
+🟢 7d ▮▮▮▮▮▮▮▯▯▯ 78% ⏱️ 4d 1h 6m 55s
 ```
 
 **Line 1 — Context window**
