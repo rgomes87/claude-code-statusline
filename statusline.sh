@@ -98,10 +98,18 @@ else
   EFFORT_LABEL=""
 fi
 
+# Model colour: Haiku → green, Sonnet → cyan, Opus → red
+case "$MODEL" in
+  *[Hh]aiku*)  MODEL_COL=$GREEN ;;
+  *[Ss]onnet*) MODEL_COL=$ORANGE ;;
+  *[Oo]pus*)   MODEL_COL=$RED   ;;
+  *)           MODEL_COL=$CYAN  ;;
+esac
+
 if [ -n "$EFFORT" ]; then
-  MODEL_COLORED=$(printf "${bold}${CYAN}${MODEL}${reset}${GREY} · ${reset}${EFFORT_LABEL}")
+  MODEL_COLORED=$(printf "${bold}${MODEL_COL}${MODEL}${reset}${GREY} · ${reset}${EFFORT_LABEL}")
 else
-  MODEL_COLORED=$(printf "${bold}${CYAN}${MODEL}${reset}")
+  MODEL_COLORED=$(printf "${bold}${MODEL_COL}${MODEL}${reset}")
 fi
 
 # ── Token reads (needed before context bar) ──────────────────────────────────
