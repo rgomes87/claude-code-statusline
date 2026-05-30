@@ -72,7 +72,7 @@ fi
 
 # ── Model name ───────────────────────────────────────────────────────────────
 MODEL=$(echo "$input" | jq -r '.model.display_name')
-EFFORT=$(echo "$input" | jq -r '.effortLevel // empty' 2>/dev/null)
+EFFORT=$(echo "$input" | jq -r '.effort.level // empty' 2>/dev/null)
 [ -z "$EFFORT" ] && EFFORT=$(jq -r '.effortLevel // empty' ~/.claude/settings.json 2>/dev/null)
 
 # Effort label colour — matches /effort UI colours:
@@ -103,7 +103,7 @@ case "$MODEL" in
   *[Hh]aiku*)  MODEL_COL=$GREEN ;;
   *[Ss]onnet*) MODEL_COL=$ORANGE ;;
   *[Oo]pus*)   MODEL_COL=$RED   ;;
-  *)           MODEL_COL=$CYAN  ;;
+  *)            MODEL_COL=$CYAN  ;;
 esac
 
 if [ -n "$EFFORT" ]; then
@@ -117,12 +117,10 @@ TOT_IN=$(echo "$input"  | jq -r '.context_window.total_input_tokens  // 0')
 TOT_OUT=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
 
 fmt_tok() {
-  local n="$1"
-  if [ "$n" -ge 1000 ]; then
-    python3 -c "print(f'{$n/1000:.1f}k')" 2>/dev/null || echo "${n}"
-  else
-    echo "$n"
-  fi
+  python3 -c "
+n=float('$1')
+print(f'{int(round(n/1000))}k' if n >= 1000 else str(int(n)))
+" 2>/dev/null || echo "$1"
 }
 
 # ── Context bar ─────────────────────────────────────────────────────────────
@@ -133,11 +131,11 @@ BAR_WIDTH=10
 FILLED=$((PCT * BAR_WIDTH / 100))
 
 # Max window: try JSON field first, fall back to 200K (all current Claude models)
-MAX_WIN=$(echo "$input" | jq -r '.context_window.max_tokens // 200000')
+MAX_WIN=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
 [ -z "$MAX_WIN" ] || [ "$MAX_WIN" -eq 0 ] 2>/dev/null && MAX_WIN=200000
 
 # Actual context tokens in use (used % × window size)
-CTX_TOKS=$(python3 -c "print(int($PCT_RAW * $MAX_WIN / 100))" 2>/dev/null || echo 0)
+CTX_TOKS=$(python3 -c "print($PCT_RAW * $MAX_WIN / 100)" 2>/dev/null || echo 0)
 
 # 100K separator: cell boundary index (separator appears after this cell)
 SEP_CELL=$(python3 -c "print(int(100000 / $MAX_WIN * $BAR_WIDTH))" 2>/dev/null || echo 5)
